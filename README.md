@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="./readme-archivos/banner.svg" alt="PostPedal Banner" width="100%" />
+</div>
+
 # PostPedal 🚴‍♂️🎸
 
 > **El Manifiesto Anti-Reggaeton hecho código.**  
@@ -6,10 +10,6 @@
 ![Estado](https://img.shields.io/badge/Estado-Funcional-green)
 ![Licencia](https://img.shields.io/github/license/pfelipm/postpedal)
 ![Vibe](https://img.shields.io/badge/Vibe-Epic_PostRock-blueviolet)
-
-<div align="center">
-  <img src="./readme-archivos/PostPedal5.png" alt="PostPedal Main View" width="100%" style="border-radius: 10px" />
-</div>
 
 🔴 **Úsalo ahora mismo en:** [https://postpedal.pablofelip.online](https://postpedal.pablofelip.online)
 
@@ -46,6 +46,7 @@ Esta no es una app de reproducción de MP3. Aquí hay **ciencia y ruido**:
   <img src="./readme-archivos/PostPedal2.png" width="100%" alt="Screenshot 2" style="margin-bottom: 20px; border-radius: 8px;"/>
   <img src="./readme-archivos/PostPedal3.png" width="100%" alt="Screenshot 3" style="margin-bottom: 20px; border-radius: 8px;"/>
   <img src="./readme-archivos/PostPedal4.png" width="100%" alt="Screenshot 4" style="margin-bottom: 20px; border-radius: 8px;"/>
+  <img src="./readme-archivos/PostPedal5.png" width="100%" alt="Screenshot 5" style="margin-bottom: 20px; border-radius: 8px;"/>
   <img src="./readme-archivos/PostPedal6.png" width="100%" alt="Screenshot 6" style="margin-bottom: 20px; border-radius: 8px;"/>
 </div>
 
