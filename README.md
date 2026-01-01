@@ -70,6 +70,8 @@ Lo mejor de este proyecto es su simplicidad arquitectónica.
 1.  **Descarga el archivo:** Basta con descargarse el archivo `index.html` de este repositorio.
 2.  **Abre el archivo:** Haz doble clic sobre `index.html` para abrirlo en tu navegador favorito (Chrome, Firefox, Edge...). No se han detectado problemas de funcionamiento al usarlo localmente incluso en ausencia de un servidor web ligero.
 
+> ⚠️ **Nota Importante:** Aunque la aplicación se ejecuta desde un archivo local, **necesitas conexión a Internet activa** para que el navegador pueda descargar las librerías externas (React, Three.js, etc.) desde los servidores CDN.
+
 ¡Y a pedalear!
 
 ## 🤝 Contribuyendo
