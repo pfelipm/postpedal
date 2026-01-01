@@ -34,6 +34,25 @@ Esta no es una app de reproducción de MP3. Aquí hay **ciencia y ruido**:
     *   **Modo Postrock:** Ondas de sierra desafinadas para crear muros de sonido densos.
     *   **Modo Sinfónico:** Texturas espaciales y melodías generativas.
     *   El audio reacciona a tu esfuerzo: la música se vuelve más intensa y "ruge" cuando subes la intensidad.
+
+### 🎧 Arquitectura de Sonido (`RhythmicEngine`)
+
+El motor de audio no es un reproductor, es un **sintetizador reactivo** basado en la Web Audio API que funciona como un instrumento vivo:
+
+*   **Generación Sustractiva y Modular:**
+    *   **Pads (Atmósfera):** Base armónica rica creada mediante múltiples osciladores simultáneos (dientes de sierra desafinados en modo *Post-Rock*, y senoidales/triangulares en modo *Sinfónico*).
+    *   **Kick (Ritmo):** Sintetizado desde cero con dos ondas senoidales para el golpe y subgrave. No usa samples.
+    *   **Melodía Procedimental:** Algoritmos de "camino aleatorio" generan melodías que respetan las escalas musicales y nunca se repiten exactamente.
+    *   **Efectos:** Delay con feedback para eco espacial y simulación de *sidechain compression* (efecto de bombeo) sincronizado con el bombo.
+
+*   **Reactividad (Biofeedback):**
+    *   **RPM ↔ Tempo:** El BPM de la música se ajusta matemáticamente a tu cadencia de pedaleo en tiempo real.
+    *   **Esfuerzo ↔ Timbre:** A mayor intensidad, los filtros paso bajo se abren (sonido más brillante), aumenta el volumen y cambia la resonancia.
+
+*   **Coherencia Musical:**
+    *   El sistema rota inteligentemente entre progresiones de acordes cada 32 tiempos.
+    *   Ajusta automáticamente las escalas melódicas para evitar disonancias con el acorde base activo.
+
 *   🌀 **Túnel Hipnótico 3D:** Una visualización construida con **Three.js** que reacciona a tus RPM y vatios. Diseñada para que te quedes mirando al centro y olvides que te arden los cuádriceps.
 *   🧠 **Generador de Sesiones Inteligente:** ¿No sabes qué hacer hoy? Dile cuánto tiempo tienes y cuánto quieres sufrir (del 1 al 5). El algoritmo creará una ruta con calentamiento, picos de intensidad y enfriamiento.
 *   ✏️ **Editor Manual:** Crea tus propias tablas de tortura arrastrando y soltando tramos.
