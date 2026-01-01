@@ -877,6 +877,24 @@
             const totalDuration = useMemo(() => route.segments.reduce((acc, s) => acc + s.duration, 0), [route]);
             const sessionRemaining = totalDuration - elapsed;
 
+            const calculateLoad = (targetEffort, rpm) => {
+                // Formula: Resistance = (Effort - (RPM * 0.35)) / 0.65
+                const rawLoad = (targetEffort - (rpm * 0.35)) / 0.65;
+                return Math.max(0, Math.min(100, Math.round(rawLoad)));
+            };
+
+            const getLoadLabel = (val) => {
+                if (val >= 80) return { label: 'ALTA', color: 'text-red-500' };
+                if (val >= 65) return { label: 'MEDIA ALTA', color: 'text-orange-500' };
+                if (val >= 50) return { label: 'MEDIA', color: 'text-yellow-500' };
+                if (val >= 35) return { label: 'MEDIA BAJA', color: 'text-yellow-300' };
+                if (val >= 20) return { label: 'BAJA', color: 'text-blue-300' };
+                return { label: 'FRENO LIBRE', color: 'text-blue-500' };
+            };
+
+            const currentLoad = calculateLoad(current.effort, current.RPM || current.rpm);
+            const loadInfo = getLoadLabel(currentLoad);
+
             const endSession = () => {
                 setIsPlaying(false);
                 audioEngine.stop();
@@ -990,6 +1008,11 @@
                                 </div>
                                 <div className="flex items-center justify-center gap-16 mt-8">
                                     <div className="text-center"><span className="text-[10px] uppercase font-black text-slate-700 block mb-1">Cadencia</span><span className="text-6xl font-black">{current.RPM || current.rpm} <span className="text-lg text-slate-700">RPM</span></span></div>
+                                    <div className="text-center">
+                                        <span className="text-[10px] uppercase font-black text-slate-700 block mb-1">Carga estimada</span>
+                                        <span className={`text-3xl lg:text-4xl font-black block ${loadInfo.color}`}>{loadInfo.label}</span>
+                                        <span className="text-lg font-bold text-slate-600">~{currentLoad}%</span>
+                                    </div>
                                     <div className="text-center"><span className="text-[10px] uppercase font-black text-slate-700 block mb-1">Intensidad</span><span className="text-6xl font-black" style={{ color: zone.color }}>{current.effort}%</span></div>
                                 </div>
                             </div>
