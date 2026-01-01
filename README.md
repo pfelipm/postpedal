@@ -42,11 +42,11 @@ Esta no es una app de reproducción de MP3. Aquí hay **ciencia y ruido**:
 ## 📸 Galería
 
 <div align="center">
-  <img src="./readme-archivos/PostPedal1.png" width="45%" alt="Screenshot 1"/>
-  <img src="./readme-archivos/PostPedal2.png" width="45%" alt="Screenshot 2"/>
-  <img src="./readme-archivos/PostPedal3.png" width="45%" alt="Screenshot 3"/>
-  <img src="./readme-archivos/PostPedal4.png" width="45%" alt="Screenshot 4"/>
-  <img src="./readme-archivos/PostPedal6.png" width="45%" alt="Screenshot 6"/>
+  <img src="./readme-archivos/PostPedal1.png" width="100%" alt="Screenshot 1" style="margin-bottom: 20px; border-radius: 8px;"/>
+  <img src="./readme-archivos/PostPedal2.png" width="100%" alt="Screenshot 2" style="margin-bottom: 20px; border-radius: 8px;"/>
+  <img src="./readme-archivos/PostPedal3.png" width="100%" alt="Screenshot 3" style="margin-bottom: 20px; border-radius: 8px;"/>
+  <img src="./readme-archivos/PostPedal4.png" width="100%" alt="Screenshot 4" style="margin-bottom: 20px; border-radius: 8px;"/>
+  <img src="./readme-archivos/PostPedal6.png" width="100%" alt="Screenshot 6" style="margin-bottom: 20px; border-radius: 8px;"/>
 </div>
 
 <br/>
