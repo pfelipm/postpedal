@@ -34,8 +34,12 @@ Esta no es una app de reproducción de MP3. Aquí hay **ciencia y ruido**:
     *   **Modo Postrock:** Ondas de sierra desafinadas para crear muros de sonido densos.
     *   **Modo Sinfónico:** Texturas espaciales y melodías generativas.
     *   El audio reacciona a tu esfuerzo: la música se vuelve más intensa y "ruge" cuando subes la intensidad.
+*   🌀 **Túnel Hipnótico 3D:** Una visualización construida con **Three.js** que reacciona a tus RPM y vatios. Diseñada para que te quedes mirando al centro y olvides que te arden los cuádriceps.
+*   🧠 **Generador de Sesiones Inteligente:** ¿No sabes qué hacer hoy? Dile cuánto tiempo tienes y cuánto quieres sufrir (del 1 al 5). El algoritmo creará una ruta con calentamiento, picos de intensidad y enfriamiento.
+*   ✏️ **Editor Manual:** Crea tus propias tablas de tortura arrastrando y soltando tramos.
+*   💾 **Persistencia Local:** Tus rutas se guardan en el navegador. Importa y exporta tu biblioteca en JSON para compartirla (o para hacer copias de seguridad).
 
-### 🎧 Arquitectura de Sonido (`RhythmicEngine`)
+## 🎧 Arquitectura de Sonido (`RhythmicEngine`)
 
 El motor de audio no es un reproductor, es un **sintetizador reactivo** basado en la Web Audio API que funciona como un instrumento vivo:
 
@@ -52,11 +56,6 @@ El motor de audio no es un reproductor, es un **sintetizador reactivo** basado e
 *   **Coherencia Musical:**
     *   El sistema rota inteligentemente entre progresiones de acordes cada 32 tiempos.
     *   Ajusta automáticamente las escalas melódicas para evitar disonancias con el acorde base activo.
-
-*   🌀 **Túnel Hipnótico 3D:** Una visualización construida con **Three.js** que reacciona a tus RPM y vatios. Diseñada para que te quedes mirando al centro y olvides que te arden los cuádriceps.
-*   🧠 **Generador de Sesiones Inteligente:** ¿No sabes qué hacer hoy? Dile cuánto tiempo tienes y cuánto quieres sufrir (del 1 al 5). El algoritmo creará una ruta con calentamiento, picos de intensidad y enfriamiento.
-*   ✏️ **Editor Manual:** Crea tus propias tablas de tortura arrastrando y soltando tramos.
-*   💾 **Persistencia Local:** Tus rutas se guardan en el navegador. Importa y exporta tu biblioteca en JSON para compartirla (o para hacer copias de seguridad).
 
 ## 📸 Galería
 
