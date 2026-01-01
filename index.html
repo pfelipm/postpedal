@@ -785,15 +785,25 @@
                     segments: prev.segments.map(s => s.id === id ? {...s, [field]: parseInt(val) || 0} : s)
                 }));
             };
+            const blurSeg = (id, field, val, min, max) => {
+                let num = parseInt(val);
+                if (isNaN(num)) num = min;
+                if (num < min) num = min;
+                if (num > max) num = max;
+                updateSeg(id, field, num);
+            };
 
             return (
-                <div className="max-w-5xl mx-auto p-8 lg:p-12 pb-40">
-                    <div className="flex items-center justify-between mb-12">
-                        <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-white transition-colors font-bold text-sm lg:text-base">
-                            <ChevronLeft /> Volver a biblioteca
+                <div className="max-w-5xl mx-auto p-8 lg:p-12 pb-24">
+                    <header className="flex items-center justify-between mb-8">
+                        <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors px-4 py-2 rounded-xl hover:bg-slate-900/50">
+                            <X size={20} /> Cancelar
                         </button>
-                        <h2 className="text-lg lg:text-xl font-black uppercase tracking-tighter text-slate-400">Editor de sesión</h2>
-                    </div>
+                        <h2 className="text-xl font-black uppercase tracking-tighter text-slate-400">Editor de sesión</h2>
+                        <button onClick={() => onSave(data)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20">
+                            <Save size={18} /> Guardar
+                        </button>
+                    </header>
                     <div className="space-y-8">
                         <section className="bg-slate-900/40 p-8 rounded-[2rem] border border-slate-900">
                             <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 mb-6 flex items-center gap-2"><Info size={16} /> Datos generales</h3>
@@ -822,7 +832,7 @@
                                     <Plus size={14} /> Añadir tramo
                                 </button>
                             </div>
-                            <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                            <div className="p-6 space-y-3">
                                 {data.segments.map((s, idx) => {
                                     const zone = getZone(s.effort);
                                     return (
@@ -830,9 +840,18 @@
                                             {GripVertical && <GripVertical size={28} className="text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing" />}
                                             <div className="w-1.5 h-10 rounded-full" style={{ backgroundColor: zone.color }} />
                                             <div className="grid grid-cols-3 gap-4 flex-grow">
-                                                <div><label className="block text-xs font-semibold text-slate-400 mb-1.5">Duración (s)</label><input type="number" value={s.duration} onChange={e => updateSeg(s.id, 'duration', e.target.value)} className="w-full bg-transparent font-black text-lg outline-none" /></div>
-                                                <div><label className="block text-xs font-semibold text-slate-400 mb-1.5">RPM</label><input type="number" value={s.RPM} onChange={e => updateSeg(s.id, 'RPM', e.target.value)} className="w-full bg-transparent font-black text-lg outline-none" /></div>
-                                                <div><label className="block text-xs font-semibold text-slate-400 mb-1.5">Esfuerzo (%)</label><input type="number" value={s.effort} onChange={e => updateSeg(s.id, 'effort', e.target.value)} className="w-full bg-transparent font-black text-lg outline-none" style={{ color: zone.color }} /></div>
+                                                <div>
+                                                    <label className="block text-xs font-semibold text-slate-400 mb-1.5">Duración (s)</label>
+                                                    <input type="number" min="5" max="3600" value={s.duration} onChange={e => updateSeg(s.id, 'duration', e.target.value)} onBlur={e => blurSeg(s.id, 'duration', e.target.value, 5, 3600)} className="w-full bg-transparent font-black text-lg outline-none" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-semibold text-slate-400 mb-1.5">RPM</label>
+                                                    <input type="number" min="50" max="130" value={s.RPM} onChange={e => updateSeg(s.id, 'RPM', e.target.value)} onBlur={e => blurSeg(s.id, 'RPM', e.target.value, 50, 130)} className="w-full bg-transparent font-black text-lg outline-none" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-semibold text-slate-400 mb-1.5">Esfuerzo (%)</label>
+                                                    <input type="number" min="0" max="100" value={s.effort} onChange={e => updateSeg(s.id, 'effort', e.target.value)} onBlur={e => blurSeg(s.id, 'effort', e.target.value, 0, 100)} className="w-full bg-transparent font-black text-lg outline-none" style={{ color: zone.color }} />
+                                                </div>
                                             </div>
                                             <button onClick={() => setData(prev => ({...prev, segments: prev.segments.filter(x => x.id !== s.id)}))} className="text-slate-700 hover:text-red-500 p-2"><Trash2 size={18} /></button>
                                         </div>
@@ -841,10 +860,6 @@
                             </div>
                         </section>
                     </div>
-                    <footer className="fixed bottom-0 left-0 right-0 p-8 bg-slate-950/90 backdrop-blur-2xl border-t border-slate-900 flex justify-end gap-4 z-50">
-                        <button onClick={onBack} className="px-8 py-3 text-slate-500 font-bold hover:text-white transition-colors">Cancelar</button>
-                        <button onClick={() => onSave(data)} className="px-12 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-black text-lg shadow-2xl shadow-blue-900/40 transition-all flex items-center gap-3"><Save size={22} /> Guardar cambios</button>
-                    </footer>
                 </div>
             );
         }
