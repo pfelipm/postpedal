@@ -7,6 +7,10 @@
 ![Licencia](https://img.shields.io/github/license/pfelipm/postpedal)
 ![Vibe](https://img.shields.io/badge/Vibe-Epic_PostRock-blueviolet)
 
+<div align="center">
+  <img src="./readme-archivos/PostPedal5.png" alt="PostPedal Main View" width="100%" style="border-radius: 10px" />
+</div>
+
 🔴 **Úsalo ahora mismo en:** [https://postpedal.pablofelip.online](https://postpedal.pablofelip.online)
 
 ---
@@ -34,6 +38,18 @@ Esta no es una app de reproducción de MP3. Aquí hay **ciencia y ruido**:
 *   🧠 **Generador de Sesiones Inteligente:** ¿No sabes qué hacer hoy? Dile cuánto tiempo tienes y cuánto quieres sufrir (del 1 al 5). El algoritmo creará una ruta con calentamiento, picos de intensidad y enfriamiento.
 *   ✏️ **Editor Manual:** Crea tus propias tablas de tortura arrastrando y soltando tramos.
 *   💾 **Persistencia Local:** Tus rutas se guardan en el navegador. Importa y exporta tu biblioteca en JSON para compartirla (o para hacer copias de seguridad).
+
+## 📸 Galería
+
+<div align="center">
+  <img src="./readme-archivos/PostPedal1.png" width="45%" alt="Screenshot 1"/>
+  <img src="./readme-archivos/PostPedal2.png" width="45%" alt="Screenshot 2"/>
+  <img src="./readme-archivos/PostPedal3.png" width="45%" alt="Screenshot 3"/>
+  <img src="./readme-archivos/PostPedal4.png" width="45%" alt="Screenshot 4"/>
+  <img src="./readme-archivos/PostPedal6.png" width="45%" alt="Screenshot 6"/>
+</div>
+
+<br/>
 
 ## 🛠 Tecnologías
 
