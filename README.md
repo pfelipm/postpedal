@@ -67,15 +67,10 @@ Esta aplicación es una demostración de lo que se puede hacer con los estándar
 
 Lo mejor de este proyecto es su simplicidad arquitectónica.
 
-1.  **Clona el repositorio:**
-    ```bash
-    git clone https://github.com/pfelipm/postpedal.git
-    ```
-2.  **Abre el archivo:**
-    Simplemente abre el archivo `index.html` en tu navegador favorito (Chrome, Firefox, Edge...).
-    *   *Nota:* Para que los módulos ESM funcionen correctamente en local sin problemas de CORS, es recomendable usar un servidor ligero como "Live Server" en VS Code o `python3 -m http.server`.
+1.  **Descarga el archivo:** Basta con descargarse el archivo `index.html` de este repositorio.
+2.  **Abre el archivo:** Haz doble clic sobre `index.html` para abrirlo en tu navegador favorito (Chrome, Firefox, Edge...). No se han detectado problemas de funcionamiento al usarlo localmente incluso en ausencia de un servidor web ligero.
 
-3.  **¡A pedalear!**
+¡Y a pedalear!
 
 ## 🤝 Contribuyendo
 
