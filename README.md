@@ -76,4 +76,4 @@ Ayúdame a hacer que el motor de audio suene menos "experimental" y más "banda 
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia [MIT](./LICENSE). Eres libre de usarlo, modificarlo y, sobre todo, de usarlo para evitar escuchar "Despacito" una vez más.
+Este proyecto se distribuye bajo los términos del archivo [LICENSE](./LICENSE).
