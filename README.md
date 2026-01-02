@@ -39,23 +39,35 @@ Esta no es una app de reproducción de MP3. Aquí hay **ciencia y ruido**:
 *   ✏️ **Editor Manual:** Crea tus propias tablas de tortura arrastrando y soltando tramos.
 *   💾 **Persistencia Local:** Tus rutas se guardan en el navegador. Importa y exporta tu biblioteca en JSON para compartirla (o para hacer copias de seguridad).
 
-## 🎧 Arquitectura de Sonido (`RhythmicEngine`)
+## 🎧 Arquitectura de Sonido Dual
 
-El motor de audio no es un reproductor, es un **sintetizador reactivo** basado en la Web Audio API que funciona como un instrumento vivo:
+Actualmente, el proyecto ofrece **dos implementaciones** distintas del motor de audio. Ambas son funcionalmente idénticas en cuanto a la generación de rutas y la interfaz, pero difieren radicalmente en la calidad sonora y el consumo de recursos:
 
-*   **Generación Sustractiva y Modular:**
-    *   **Pads (Atmósfera):** Base armónica rica creada mediante múltiples osciladores simultáneos (dientes de sierra desafinados en modo *Post-Rock*, y senoidales/triangulares en modo *Sinfónico*).
-    *   **Kick (Ritmo):** Sintetizado desde cero con dos ondas senoidales para el golpe y subgrave. No usa samples.
-    *   **Melodía Procedimental:** Algoritmos de "camino aleatorio" generan melodías que respetan las escalas musicales y nunca se repiten exactamente.
-    *   **Efectos:** Delay con feedback para eco espacial y simulación de *sidechain compression* (efecto de bombeo) sincronizado con el bombo.
+### 1. Versión Estándar (Web Audio API nativo)
+*   **Archivo:** `index-audio-lq.html`
+*   **Motor:** `RhythmicEngine` (Web Audio API puro).
+*   **Perfil:** Muy ligera y compatible. Ideal para dispositivos móviles, tablets antiguas o portátiles modestos.
+*   **Funcionamiento:** Utiliza osciladores básicos y una cadena de efectos sencilla. El *scheduling* es manual.
 
-*   **Reactividad (Biofeedback):**
-    *   **RPM ↔ Tempo:** El BPM de la música se ajusta matemáticamente a tu cadencia de pedaleo en tiempo real.
-    *   **Esfuerzo ↔ Timbre:** A mayor intensidad, los filtros paso bajo se abren (sonido más brillante), aumenta el volumen y cambia la resonancia.
+### 2. Versión Alta Fidelidad (Tone.js)
+*   **Archivo:** `index-audio-hq.html`
+*   **Motor:** `AetherAdapter` (Tone.js).
+*   **Perfil:** Calidad de estudio. Requiere un procesador moderno (PC/Mac recomendado).
+*   **Mejoras Clave:**
+    *   **Síntesis Avanzada:** Instrumentos dedicados (Sintetizadores de membrana para el bombo, polisintetizadores FM para los pads).
+    *   **Cadena de Mastering:** Compresión multibanda, limitadores, *chorus* estéreo y distorsión dinámica.
+    *   **Ritmos Euclidianos:** Patrones de batería complejos (algoritmo de Bjorklund) que evolucionan según la intensidad.
+    *   **Sincronización Total:** Los destellos visuales no se calculan estimando las RPM, sino conectándose directamente al reloj maestro de audio (`Tone.Transport`), garantizando una sincronización precisa al milisegundo entre el golpe de bombo y el flash en pantalla.
 
-*   **Coherencia Musical:**
-    *   El sistema rota inteligentemente entre progresiones de acordes cada 32 tiempos.
-    *   Ajusta automáticamente las escalas melódicas para evitar disonancias con el acorde base activo.
+---
+
+### Conceptos Comunes (Biofeedback)
+
+Independientemente de la versión, el audio es siempre **reactivo**:
+
+*   **RPM ↔ Tempo:** La música acelera o frena matemáticamente con tu pedaleo en tiempo real.
+*   **Esfuerzo ↔ Intensidad:** Al subir la resistencia (Vatios/Esfuerzo), el motor "abre" los filtros (sonido más brillante), añade distorsión y complejidad armónica.
+*   **Coherencia Musical:** El sistema rota inteligentemente entre escalas y progresiones de acordes para evitar la monotonía, asegurando que la melodía generada siempre esté en tono.
 
 ## 📸 Galería
 
@@ -75,7 +87,8 @@ El motor de audio no es un reproductor, es un **sintetizador reactivo** basado e
 Esta aplicación es una demostración de lo que se puede hacer con los estándares web modernos **sin necesidad de pasos de compilación complejos** (bundlers). Es un único archivo HTML supervitaminado.
 
 *   **React 18** (vía ESM/Import Maps): Para la interfaz de usuario.
-*   **Web Audio API:** El corazón del sintetizador. Osciladores, ganancias, filtros biquad y delays en tiempo real.
+*   **Tone.js (Versión HQ):** Framework de audio avanzado para síntesis musical y programación rítmica de precisión.
+*   **Web Audio API (Versión Estándar):** El corazón del sintetizador ligero. Osciladores, ganancias, filtros biquad y delays en tiempo real.
 *   **Three.js:** Para los gráficos 3D del túnel.
 *   **Tailwind CSS:** Para que la interfaz se vea bonita sin escribir mil líneas de CSS.
 *   **Lucide React:** Iconografía.
@@ -85,8 +98,10 @@ Esta aplicación es una demostración de lo que se puede hacer con los estándar
 
 Lo mejor de este proyecto es su simplicidad arquitectónica.
 
-1.  **Descarga el archivo:** Basta con descargarse el archivo `index.html` de este repositorio.
-2.  **Abre el archivo:** Haz doble clic sobre `index.html` para abrirlo en tu navegador favorito (Chrome, Firefox, Edge...). No se han detectado problemas de funcionamiento al usarlo localmente incluso en ausencia de un servidor web ligero.
+1.  **Elige tu versión:**
+    *   Descarga `index-audio-hq.html` si estás en un ordenador y quieres la mejor experiencia de sonido.
+    *   Descarga `index-audio-lq.html` si estás en un móvil/tablet o notas que el audio se entrecorta.
+2.  **Abre el archivo:** Haz doble clic sobre el archivo elegido para abrirlo en tu navegador favorito (Chrome, Firefox, Edge...). No se han detectado problemas de funcionamiento al usarlo localmente incluso en ausencia de un servidor web ligero.
 
 > ⚠️ **Nota Importante:** Aunque la aplicación se ejecuta desde un archivo local, **necesitas conexión a Internet activa** para que el navegador pueda descargar las librerías externas (React, Three.js, etc.) desde los servidores CDN.
 

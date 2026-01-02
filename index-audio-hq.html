@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostPedal - Ciclo Indoor Procedural</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- Tone.js (Nuevo Motor de Audio) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <!-- Import Maps -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+        }
+    }
+    </script>
+
+    <!-- Babel Standalone -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.3); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.5); }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-in { animation: fadeIn 0.5s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased overflow-x-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import {
+            Play, Pause, Plus, Trash2, Download, Upload,
+            ChevronLeft, Save, PlayCircle, Edit3, Clock,
+            Settings, Music, FileText, Info, Sparkles, RefreshCw,
+            GripVertical, Box, BarChart2, Layout, SkipBack, SkipForward,
+            Trophy, Activity, Zap, Waves, Wind, HelpCircle, Github, X, Linkedin
+        } from 'lucide-react';
+
+        // --- Constantes y utilidades ---
+
+        const ZONES = [
+            { name: 'Zona 1', min: 0, max: 59, color: '#3b82f6', label: 'Recuperación' },
+            { name: 'Zona 2', min: 60, max: 69, color: '#22c55e', label: 'Resistencia' },
+            { name: 'Zona 3', min: 70, max: 79, color: '#eab308', label: 'Tempo' },
+            { name: 'Zona 4', min: 80, max: 89, color: '#f97316', label: 'Umbral' },
+            { name: 'Zona 5', min: 90, max: 200, color: '#ef4444', label: 'VO2 máx' }
+        ];
+
+        const getZone = (effort) => ZONES.find(z => effort <= z.max) || ZONES[ZONES.length - 1];
+
+        // --- AetherAdapter: El nuevo corazón basado en Tone.js ---
+
+        class AetherAdapter {
+            constructor() {
+                this.isInitialized = false;
+                this.isPlaying = false;
+                this.mode = 'postrock';
+
+                // Estado interno
+                this.internalEffort = 0;
+                this.currentZone = 1;
+                this.bpm = 90;
+                this.currentScaleIndex = 0;
+
+                // Tone.js Nodos
+                this.kick = null;
+                this.snare = null;
+                this.hihat = null;
+                this.bassSynth = null;
+                this.leadSynth = null;
+                this.padSynth = null;
+
+                this.masterFilter = null;
+                this.masterLimiter = null;
+                this.masterDistortion = null;
+                this.masterReverb = null;
+                this.masterDelay = null;
+                this.masterChorus = null;
+                this.analyser = null;
+
+                // Datos musicales
+                this.scalesLibrary = {
+                    space: [
+                        ["C3", "D3", "E3", "G3", "A3", "B3", "D4"], // C Lidio
+                        ["G3", "A3", "B3", "D4", "E4", "F#4", "A4"], // G Lidio
+                        ["D3", "E3", "F#3", "A3", "B3", "C#4", "E4"] // D Lidio
+                    ],
+                    postrock: [
+                        ["D3", "E3", "F3", "G3", "A3", "C4", "D4"], // D Dórico
+                        ["A3", "B3", "C4", "D4", "E4", "G4", "A4"], // A Dórico
+                        ["E3", "F#3", "G3", "A3", "B3", "D4", "E4"] // E Dórico
+                    ]
+                };
+            }
+
+            async init() {
+                if (this.isInitialized) return;
+
+                Tone.context.lookAhead = 0.1;
+
+                await Tone.start();
+
+                // --- Cadena Master ---
+                this.masterLimiter = new Tone.Limiter(-1).toDestination();
+
+                // Analizador para energía cruda (opcional ahora para el flash, pero útil para otros efectos)
+                this.analyser = new Tone.Analyser("fft", 64);
+                this.analyser.smoothing = 0.5;
+
+                this.masterReverb = new Tone.Reverb({ decay: 4, wet: 0.3 }).connect(this.masterLimiter);
+                this.masterChorus = new Tone.Chorus(4, 2.5, 0.5).connect(this.masterReverb);
+                this.masterDelay = new Tone.PingPongDelay("8n.", 0.2).connect(this.masterReverb);
+                this.masterFilter = new Tone.Filter(2000, "lowpass", -12).connect(this.masterDelay);
+                this.masterDistortion = new Tone.Distortion(0).connect(this.masterFilter);
+
+                this.masterLimiter.connect(this.analyser);
+
+                // --- Instrumentos ---
+
+                // Kick (Percusión)
+                const kickCompressor = new Tone.Compressor({ threshold: -10, ratio: 12, attack: 0.003, release: 0.25 }).connect(this.masterLimiter);
+                this.kick = new Tone.MembraneSynth({
+                    pitchDecay: 0.08, octaves: 4, oscillator: { type: "sine" },
+                    envelope: { attack: 0.001, decay: 0.5, sustain: 0, release: 1 }
+                }).connect(kickCompressor);
+                this.kick.volume.value = 0;
+
+                // Snare
+                this.snare = new Tone.NoiseSynth({
+                    noise: { type: "pink" }, envelope: { attack: 0.001, decay: 0.2, sustain: 0 }
+                }).connect(this.masterReverb);
+                this.snare.volume.value = -12;
+
+                // HiHat
+                this.hihat = new Tone.MetalSynth({
+                    frequency: 200, envelope: { attack: 0.001, decay: 0.05, release: 0.01 },
+                    harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5
+                }).connect(this.masterReverb);
+                this.hihat.volume.value = -18;
+
+                // Bass (con distorsión propia)
+                this.bassDistortion = new Tone.Distortion(0);
+                this.bassSynth = new Tone.MonoSynth({
+                    oscillator: { type: "sawtooth" },
+                    envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.8 },
+                    filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 0.5, baseFrequency: 80, octaves: 2 }
+                }).connect(this.bassDistortion);
+                this.bassDistortion.connect(this.masterDistortion);
+                this.bassSynth.volume.value = -6;
+
+                // Lead
+                this.leadSynth = new Tone.Synth({
+                    oscillator: { type: "triangle" }, envelope: { attack: 0.02, decay: 0.2, sustain: 0.2, release: 1 }
+                }).connect(this.masterDelay);
+                this.leadSynth.connect(this.masterChorus);
+                this.leadSynth.volume.value = -8;
+
+                // Pad
+                this.padSynth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "triangle" }, envelope: { attack: 2, decay: 1, sustain: 0.9, release: 3 }
+                }).connect(this.masterChorus);
+                this.padSynth.volume.value = -14;
+
+                // --- Secuenciador ---
+                this.scheduleSequencer();
+
+                this.isInitialized = true;
+                this.applyModeSettings();
+            }
+
+            // Algoritmo Eucladiano (Bjorklund simplificado)
+            getEuclideanPattern(steps, hits) {
+                const pattern = new Array(steps).fill(0);
+                if (hits <= 0) return pattern;
+                let bucket = 0;
+                for (let i = 0; i < steps; i++) {
+                    bucket += hits;
+                    if (bucket >= steps) {
+                        bucket -= steps;
+                        pattern[i] = 1;
+                    }
+                }
+                return pattern;
+            }
+
+            scheduleSequencer() {
+                Tone.Transport.scheduleRepeat((time) => {
+                    // Calculamos posición musical
+                    const pos = Tone.Transport.position.split(':');
+                    const bar = parseInt(pos[0]);
+                    const beat = parseInt(pos[1]);
+                    const sixteenth = Math.floor(parseFloat(pos[2]));
+                    const step = (beat * 4) + sixteenth;
+
+                    // Rotación Armónica (Círculo de Quintas cada 8 compases)
+                    if (bar % 8 === 0 && step === 0 && bar > 0) {
+                        const scales = this.scalesLibrary[this.mode];
+                        this.currentScaleIndex = (this.currentScaleIndex + 1) % scales.length;
+                    }
+
+                    this.playDrums(time, step, beat);
+                    this.playBass(time, step, beat, bar);
+                    this.playHarmony(time, step, beat, bar);
+
+                }, "16n");
+            }
+
+            playDrums(time, step, beat) {
+                // Kick: negras (on the beat)
+                if (step % 4 === 0) {
+                    this.kick.triggerAttackRelease("C1", "8n", time);
+                }
+
+                // Lógica de Zonas
+                if (this.currentZone >= 2) {
+                    // Hi-Hats
+                    let hits = this.currentZone === 3 ? 8 : (this.currentZone === 4 ? 12 : 16);
+                    if (this.currentZone === 2) hits = 4;
+
+                    if (this.mode === 'space') {
+                        // Aleatorio disperso
+                        if (Math.random() < (hits / 32)) {
+                            this.hihat.triggerAttackRelease("32n", time, 0.2);
+                        }
+                    } else {
+                        // Euclidiano
+                        const pattern = this.getEuclideanPattern(16, hits);
+                        if (pattern[step]) {
+                            const vel = 0.3 + Math.random() * 0.2;
+                            this.hihat.triggerAttackRelease("32n", time, vel);
+                        }
+                    }
+                }
+
+                // Snare: en 2 y 4 (Backbeat) a partir de Zona 3
+                if ((beat === 1 || beat === 3) && step % 4 === 0 && this.currentZone >= 3) {
+                    this.snare.triggerAttackRelease("16n", time);
+                }
+            }
+
+            playBass(time, step, beat, bar) {
+                const scales = this.scalesLibrary[this.mode];
+                const currentScale = scales[this.currentScaleIndex % scales.length];
+                let note = currentScale[0]; // Tónica
+
+                // Variación simple de línea de bajo
+                if (bar % 4 === 2) note = currentScale[5];
+                if (bar % 4 === 3) note = currentScale[4];
+
+                const bassNote = Tone.Frequency(note).transpose(-12);
+
+                if (this.mode === 'space') {
+                    // Drone largo
+                    if (step === 0 && bar % 2 === 0) {
+                        this.bassSynth.triggerAttackRelease(bassNote, "2m", time, 0.5);
+                    }
+                } else {
+                    // Rítmico (corcheas)
+                    if (step % 2 === 0 && this.currentZone >= 2) {
+                        this.bassSynth.triggerAttackRelease(bassNote, "8n", time, 0.6);
+                    }
+                }
+            }
+
+            playHarmony(time, step, beat, bar) {
+                const scales = this.scalesLibrary[this.mode];
+                const scale = scales[this.currentScaleIndex % scales.length];
+
+                // Acordes (Pads) - Cambio lento
+                if (step === 0 && bar % 2 === 0) {
+                    // Tríada + 7a
+                    const chord = [scale[0], scale[2], scale[4], scale[6]];
+                    this.padSynth.triggerAttackRelease(chord, "2m", time);
+                }
+
+                // Melodía (Lead) - Probabilística según zona
+                if (this.currentZone >= 3) {
+                    let prob = (this.currentZone - 2) * 0.15;
+                    if (Math.random() < prob && step % 2 === 0) {
+                        let note = scale[Math.floor(Math.random() * scale.length)];
+                        this.leadSynth.triggerAttackRelease(note, "16n", time);
+                    }
+                }
+            }
+
+            setMode(newMode) {
+                if (newMode === 'symphonic') newMode = 'space'; // Mapeo de compatibilidad
+                if (this.mode !== newMode) {
+                    this.mode = newMode;
+                    this.currentScaleIndex = 0;
+                    if (this.isInitialized) this.applyModeSettings();
+                }
+            }
+
+            applyModeSettings() {
+                const rampTime = 2;
+                if (this.mode === 'postrock') {
+                    // Config Post-rock (Más sucio, sawtooh)
+                    this.leadSynth.set({ oscillator: { type: "fatsawtooth", count: 3, spread: 20 }, envelope: { attack: 0.01 } });
+                    this.bassSynth.oscillator.type = "sawtooth";
+                    this.padSynth.set({ oscillator: { type: "fatsawtooth", count: 3, spread: 30 } });
+
+                    this.bassDistortion.wet.rampTo(0.4, rampTime);
+                    this.masterReverb.wet.rampTo(0.2, rampTime);
+                    this.masterChorus.wet.rampTo(0, rampTime);
+                } else {
+                    // Config Espacial (Más puro, sine/triangle)
+                    this.leadSynth.set({ oscillator: { type: "sine" }, envelope: { attack: 0.5 } });
+                    this.bassSynth.oscillator.type = "triangle";
+                    this.padSynth.set({ oscillator: { type: "triangle" } });
+
+                    this.bassDistortion.wet.rampTo(0, rampTime);
+                    this.masterReverb.wet.rampTo(0.5, rampTime);
+                    this.masterChorus.wet.rampTo(0.8, rampTime);
+                }
+            }
+
+            start(rpm, effort) {
+                this.init().then(() => {
+                    Tone.Transport.start();
+                    this.isPlaying = true;
+                    this.update(rpm, effort);
+                });
+            }
+
+            stop() {
+                Tone.Transport.stop();
+                this.padSynth?.releaseAll();
+                this.isPlaying = false;
+            }
+
+            update(rpm, effort) {
+                if (!this.isInitialized) return;
+
+                this.bpm = Math.max(50, Math.min(130, rpm));
+                Tone.Transport.bpm.rampTo(this.bpm, 0.5);
+
+                this.internalEffort = effort / 100;
+
+                if (this.internalEffort < 0.2) this.currentZone = 1;
+                else if (this.internalEffort < 0.4) this.currentZone = 2;
+                else if (this.internalEffort < 0.6) this.currentZone = 3;
+                else if (this.internalEffort < 0.8) this.currentZone = 4;
+                else this.currentZone = 5;
+
+                const baseFreq = this.mode === 'postrock' ? 400 : 200;
+                const targetFreq = baseFreq + (this.internalEffort * 6000);
+                this.masterFilter.frequency.rampTo(targetFreq, 0.1);
+
+                let distAmount = 0;
+                if (this.mode === 'postrock' && this.currentZone >= 4) {
+                    distAmount = 0.2 + (this.internalEffort * 0.4);
+                }
+                this.masterDistortion.distortion = Math.min(1, distAmount);
+            }
+
+            playGong() {
+                if(!this.isInitialized) return;
+                const osc = new Tone.Oscillator(100, "sine").toDestination();
+                osc.volume.value = 0;
+                osc.start().stop("+3");
+                osc.frequency.exponentialRampToValueAtTime(40, "+2");
+                osc.volume.rampTo(-10, 0.1);
+                osc.volume.exponentialRampToValueAtTime(-60, "+2.5");
+            }
+
+            getEnergy() {
+                if (!this.analyser) return 0;
+                const values = this.analyser.getValue();
+                let sum = 0;
+                for(let i=0; i<4; i++) {
+                    const val = values[i];
+                    if(val > -100) sum += (val + 100);
+                }
+                return Math.max(0, sum / 400);
+            }
+
+            // NUEVO: Método para sincronización perfecta basada en BPM/RPM
+            // Devuelve un valor de 0.0 a 1.0 que representa la posición en el beat actual.
+            // 0.0 = Inicio exacto del beat (Kick).
+            getBeatProgress() {
+                if (!this.isInitialized || !this.isPlaying) return 0;
+                // Tone.Transport.seconds nos da el tiempo exacto de audio.
+                // Multiplicamos por (BPM / 60) para obtener el número de beats transcurridos.
+                // El módulo % 1 nos da la fase dentro del beat actual.
+                return (Tone.Transport.seconds * (this.bpm / 60)) % 1;
+            }
+        }
+
+        const audioEngine = new AetherAdapter();
+
+        // --- Lógica del generador automático ---
+
+        const generateRoute = (params) => {
+            const { name, author, duration, difficulty, focus } = params;
+            const totalSeconds = duration * 60;
+            const segments = [];
+            let currentSeconds = 0;
+            const warmUpTime = Math.floor(totalSeconds * 0.15);
+            segments.push({ id: crypto.randomUUID(), duration: warmUpTime, RPM: 85, effort: 45 });
+            currentSeconds += warmUpTime;
+            while (currentSeconds < (totalSeconds * 0.9)) {
+                const segDur = Math.min(180 + (Math.random() * 60), (totalSeconds * 0.9) - currentSeconds);
+                let rpm, effort;
+                const rand = Math.random();
+                if (focus === 'escalada') {
+                    rpm = 62 + Math.floor(Math.random() * 12);
+                    effort = 68 + (difficulty * 5) + (rand * 8);
+                } else if (focus === 'velocidad') {
+                    rpm = 98 + Math.floor(Math.random() * 18);
+                    effort = 62 + (difficulty * 4) + (rand * 10);
+                } else {
+                    rpm = 82 + Math.floor(Math.random() * 16);
+                    effort = 58 + (difficulty * 6) + (rand * 12);
+                }
+                segments.push({ id: crypto.randomUUID(), duration: Math.floor(segDur), RPM: Math.floor(rpm), effort: Math.min(Math.floor(effort), 98) });
+                currentSeconds += segDur;
+            }
+            segments.push({ id: crypto.randomUUID(), duration: Math.floor(totalSeconds - currentSeconds), RPM: 80, effort: 40 });
+            return {
+                id: crypto.randomUUID(),
+                name: name || "Nueva sesión rítmica",
+                author: author || "Pablo",
+                date: new Date().toLocaleDateString(),
+                description: `Sesión de ${focus} generada con una intensidad ${difficulty}/5.`,
+                segments
+            };
+        };
+
+        // --- Componentes Visuales ---
+
+        const MountainProfile = ({ segments, elapsed, totalDuration }) => {
+            const totalWidth = 1000;
+            const height = 150;
+            let currentX = 0;
+            const rects = segments.map((s) => {
+                const w = (s.duration / totalDuration) * totalWidth;
+                const h = (s.effort / 100) * height;
+                const zone = getZone(s.effort);
+                const x = currentX;
+                currentX += w;
+                return { x, w, h, color: zone.color };
+            });
+            const progressX = (elapsed / totalDuration) * totalWidth;
+            return (
+                <div className="w-full bg-slate-900/50 rounded-2xl p-4 border border-slate-800 backdrop-blur-md overflow-hidden">
+                    <svg viewBox={`0 0 ${totalWidth} ${height}`} className="w-full h-24 overflow-visible">
+                        {rects.map((r, i) => (
+                            <rect key={i} x={r.x} y={height - r.h} width={r.w} height={r.h} fill={r.color} opacity="0.6" className="transition-all duration-500" />
+                        ))}
+                        <line x1={progressX} y1="0" x2={progressX} y2={height} stroke="white" strokeWidth="2" strokeDasharray="4" />
+                        <circle cx={progressX} cy={height - (rects.find(r => progressX <= r.x + r.w)?.h || 0)} r="5" fill="white" className="transition-all duration-300" />
+                    </svg>
+                </div>
+            );
+        };
+
+        // --- Túnel Hipnótico 2.7 (Sincronizado a RPM/Beat) ---
+
+        const HypnoticTunnel = ({ rpm, effort, isPlaying }) => {
+            const containerRef = useRef();
+            const sceneRef = useRef(null);
+
+            // Referencias para la gestión del color
+            const smoothedZoneColorRef = useRef(new window.THREE.Color(0x3b82f6));
+            const targetZoneColorRef = useRef(new window.THREE.Color());
+            const whiteRef = useRef(new window.THREE.Color(0xffffff));
+
+            useEffect(() => {
+                if (!window.THREE || !containerRef.current) return;
+
+                const container = containerRef.current;
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+
+                const scene = new window.THREE.Scene();
+                const camera = new window.THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+                const renderer = new window.THREE.WebGLRenderer({ antialias: true, alpha: true });
+
+                renderer.setSize(width, height);
+                container.appendChild(renderer.domElement);
+
+                const rings = [];
+                const ringCount = 40;
+                const group = new window.THREE.Group();
+
+                for (let i = 0; i < ringCount; i++) {
+                    const geometry = new window.THREE.TorusGeometry(10, 0.05, 16, 100);
+                    const material = new window.THREE.MeshBasicMaterial({ color: 0x3b82f6 });
+                    const ring = new window.THREE.Mesh(geometry, material);
+                    ring.position.z = -i * 5;
+                    group.add(ring);
+                    rings.push(ring);
+                }
+
+                scene.add(group);
+                camera.position.z = 5;
+                sceneRef.current = { renderer, scene, camera, rings, group };
+
+                const animate = () => {
+                    if (!sceneRef.current) return;
+                    requestAnimationFrame(animate);
+                    const { rings, group, camera } = sceneRef.current;
+
+                    // 1. Gestión de Color Base (Suave)
+                    const currentZone = getZone(audioEngine.internalEffort * 100);
+                    targetZoneColorRef.current.set(currentZone.color);
+                    smoothedZoneColorRef.current.lerp(targetZoneColorRef.current, 0.05);
+
+                    // 2. Lógica de Movimiento
+                    if (audioEngine.isPlaying) {
+                        const speed = (audioEngine.bpm / 60) * 0.2;
+                        group.position.z += speed;
+                        if (group.position.z > 5) group.position.z = 0;
+                        group.rotation.z += 0.001;
+                    } else {
+                        const time = Date.now() * 0.001;
+                        group.position.z = Math.sin(time) * 1.5;
+                        group.rotation.z = Math.sin(time * 0.5) * 0.2;
+                    }
+
+                    // 3. Flash Metronómico (Basado en BPM/RPM)
+                    let flashMix = 0;
+                    let pulseScale = 1;
+
+                    if (audioEngine.isPlaying) {
+                        // Obtenemos la fase del beat (0.0 a 1.0) directamente del transporte de audio
+                        const beatProgress = audioEngine.getBeatProgress();
+
+                        // Creamos un "decay" exponencial inverso para el flash
+                        // Cuando beatProgress es 0 (inicio del beat), la función es 1.0
+                        // Cae rápidamente a 0.
+                        flashMix = Math.pow(Math.max(0, 1 - beatProgress * 4), 3);
+                        // Limitamos intensidad al 60% para ver siempre el color de fondo
+                        flashMix = Math.min(0.6, flashMix);
+
+                        // Pulso de tamaño suave
+                        pulseScale = 1 + Math.pow(Math.max(0, 1 - beatProgress * 2), 2) * 0.15;
+                    } else {
+                        // Reposo
+                        pulseScale = 1 + Math.sin(Date.now() * 0.002) * 0.05;
+                    }
+
+                    rings.forEach((ring, i) => {
+                        // Copiamos color base y aplicamos flash calculado matemáticamente
+                        ring.material.color.copy(smoothedZoneColorRef.current).lerp(whiteRef.current, flashMix);
+                        ring.scale.set(pulseScale, pulseScale, 1);
+
+                        // Rotación sutil extra en el beat
+                        if (audioEngine.isPlaying && flashMix > 0.1) {
+                             ring.rotation.z += 0.005 * (i % 2 === 0 ? 1 : -1);
+                        } else if (!audioEngine.isPlaying) {
+                            ring.rotation.z *= 0.95;
+                        }
+                    });
+
+                    renderer.render(scene, camera);
+                };
+
+                animate();
+
+                const handleResize = () => {
+                    if (!container) return;
+                    const w = container.clientWidth;
+                    const h = container.clientHeight;
+                    if (w === 0 || h === 0) return;
+                    camera.aspect = w / h;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(w, h);
+                };
+
+                window.addEventListener('resize', handleResize);
+                setTimeout(handleResize, 100);
+
+                return () => {
+                    window.removeEventListener('resize', handleResize);
+                    if (sceneRef.current) {
+                        try {
+                            sceneRef.current.renderer.dispose();
+                            if (container) container.innerHTML = '';
+                        } catch(e) {}
+                    }
+                };
+            }, []);
+
+            return <div ref={containerRef} className="absolute inset-0 z-0 pointer-events-none opacity-40" />;
+        };
+
+        // --- Componente Principal ---
+
+        function App() {
+            const [view, setView] = useState('library');
+            const [routes, setRoutes] = useState([]);
+            const [activeRoute, setActiveRoute] = useState(null);
+            const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
+            const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+            const [isAboutOpen, setIsAboutOpen] = useState(false);
+            const [audioMode, setAudioMode] = useState('postrock');
+
+            useEffect(() => {
+                const saved = localStorage.getItem('ciclo_pro_v9');
+                if (saved) setRoutes(JSON.parse(saved));
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('ciclo_pro_v9', JSON.stringify(routes));
+            }, [routes]);
+
+            const handleCreateNew = () => {
+                const newRoute = {
+                    id: crypto.randomUUID(),
+                    name: "Nueva ruta manual",
+                    author: "Pablo",
+                    date: new Date().toLocaleDateString(),
+                    description: "",
+                    segments: [{ id: crypto.randomUUID(), duration: 60, RPM: 90, effort: 50 }]
+                };
+                setActiveRoute(newRoute);
+                setView('editor');
+            };
+
+            const handleSaveRoute = (route) => {
+                setRoutes(prev => {
+                    const exists = prev.find(r => r.id === route.id);
+                    if (exists) return prev.map(r => r.id === route.id ? route : r);
+                    return [...prev, route];
+                });
+                setView('library');
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30">
+                    {view === 'library' && (
+                        <LibraryView
+                            routes={routes}
+                            onEdit={(r) => { setActiveRoute(r); setView('editor'); }}
+                            onProject={(r) => { setActiveRoute(r); setView('projection'); }}
+                            onCreate={handleCreateNew}
+                            onOpenGenerator={() => setIsGeneratorOpen(true)}
+                            onDelete={(id) => setRoutes(prev => prev.filter(r => r.id !== id))}
+                            onImport={() => setIsImportModalOpen(true)}
+                            onOpenAbout={() => setIsAboutOpen(true)}
+                            onExport={() => {
+                                const blob = new Blob([JSON.stringify(routes, null, 2)], { type: 'application/json' });
+                                const link = document.createElement('a');
+                                link.href = URL.createObjectURL(blob);
+                                link.download = `biblioteca_pablo.json`;
+                                link.click();
+                            }}
+                        />
+                    )}
+
+                    {view === 'editor' && (
+                        <EditorView
+                            route={activeRoute}
+                            onSave={handleSaveRoute}
+                            onBack={() => setView('library')}
+                        />
+                    )}
+
+                    {view === 'projection' && (
+                        <ProjectionView
+                            route={activeRoute}
+                            audioMode={audioMode}
+                            onAudioModeChange={(m) => { setAudioMode(m); audioEngine.setMode(m); }}
+                            onFinish={() => setView('summary')}
+                            onBack={() => { audioEngine.stop(); setView('library'); }}
+                        />
+                    )}
+
+                    {view === 'summary' && (
+                        <SummaryView
+                            route={activeRoute}
+                            onBack={() => {
+                                audioEngine.stop();
+                                setView('library');
+                            }}
+                        />
+                    )}
+
+                    {isGeneratorOpen && (
+                        <GeneratorModal
+                            onClose={() => setIsGeneratorOpen(false)}
+                            onGenerate={(p) => {
+                                const newRoute = generateRoute(p);
+                                setActiveRoute(newRoute);
+                                setView('editor');
+                                setIsGeneratorOpen(false);
+                            }}
+                        />
+                    )}
+
+                    {isImportModalOpen && (
+                        <ImportModal
+                            onClose={() => setIsImportModalOpen(false)}
+                            onImport={(e, mode) => {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                    try {
+                                        const list = JSON.parse(ev.target.result);
+                                        setRoutes(prev => mode === 'replace' ? (Array.isArray(list) ? list : [list]) : [...prev, ...(Array.isArray(list) ? list : [list])]);
+                                        setIsImportModalOpen(false);
+                                    } catch(e) {}
+                                };
+                                reader.readAsText(e.target.files[0]);
+                            }}
+                        />
+                    )}
+
+                    {isAboutOpen && <AboutModal onClose={() => setIsAboutOpen(false)} />}
+                </div>
+            );
+        }
+
+        // --- Vistas Hijas ---
+
+        function LibraryView({ routes, onEdit, onProject, onCreate, onOpenGenerator, onDelete, onImport, onExport, onOpenAbout }) {
+            return (
+                <div className="max-w-6xl mx-auto p-8 lg:p-12">
+                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-16">
+                        <div>
+                            <h1 className="text-6xl font-black tracking-tight mb-2 flex items-center gap-4">
+                                PostPedal
+                                <button onClick={onOpenAbout} className="text-slate-700 hover:text-blue-500 transition-colors">
+                                    <Info size={24} />
+                                </button>
+                            </h1>
+                            <p className="text-slate-500 text-lg">Biblioteca de sesiones rítmicas postrock.</p>
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                            <button onClick={onImport} className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all font-semibold">
+                                <Upload size={18} /> Importar
+                            </button>
+                            <button onClick={onExport} className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all font-semibold">
+                                <Download size={18} /> Exportar
+                            </button>
+                            <button onClick={onCreate} className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all font-semibold text-blue-400">
+                                <Plus size={18} /> Crear ruta manual
+                            </button>
+                            <button onClick={onOpenGenerator} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-all shadow-xl shadow-blue-900/20">
+                                <Sparkles size={18} /> Generador inteligente
+                            </button>
+                        </div>
+                    </header>
+
+                    {routes.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-40 border-2 border-dashed border-slate-900 rounded-[3rem] bg-slate-900/10 text-center">
+                            <PlayCircle size={64} className="text-slate-800 mb-6" />
+                            <p className="text-slate-500 text-lg mb-8">Tu biblioteca está vacía.</p>
+                            <div className="flex gap-4">
+                                <button onClick={onCreate} className="text-blue-400 font-bold text-lg hover:underline">Crear ruta manual</button>
+                                <span className="text-slate-700">o</span>
+                                <button onClick={onOpenGenerator} className="text-blue-400 font-bold text-lg hover:underline">Genera una sesión inteligente</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {routes.map(r => (
+                                <div key={r.id} className="bg-slate-900/40 border border-slate-900 p-8 rounded-[2rem] hover:border-slate-700 transition-all flex flex-col group">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-400">
+                                            <Music size={24} />
+                                        </div>
+                                        <button onClick={() => onDelete(r.id)} className="text-slate-700 hover:text-red-500 transition-colors">
+                                            <Trash2 size={20} />
+                                        </button>
+                                    </div>
+                                    <h3 className="text-2xl font-bold mb-2 truncate">{r.name}</h3>
+                                    <p className="text-slate-500 mb-8 line-clamp-2 text-sm italic">{r.description || "Sin descripción disponible."}</p>
+                                    <div className="mt-auto pt-6 border-t border-slate-900 flex items-center justify-between">
+                                        <div className="text-[10px] uppercase tracking-widest font-black text-slate-600">{r.author}</div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => onEdit(r)} className="p-2.5 hover:bg-slate-800 rounded-xl text-slate-500 hover:text-white transition-colors">
+                                                <Edit3 size={20} />
+                                            </button>
+                                            <button onClick={() => onProject(r)} className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold transition-all">
+                                                <Play size={16} fill="currentColor" /> Iniciar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function EditorView({ route, onSave, onBack }) {
+            const [data, setData] = useState({...route});
+            const [draggingIdx, setDraggingIdx] = useState(null);
+            const handleDragStart = (idx) => setDraggingIdx(idx);
+            const handleDragOver = (e, idx) => {
+                e.preventDefault();
+                if (draggingIdx === null || draggingIdx === idx) return;
+                const newSegments = [...data.segments];
+                const item = newSegments.splice(draggingIdx, 1)[0];
+                newSegments.splice(idx, 0, item);
+                setDraggingIdx(idx);
+                setData({...data, segments: newSegments});
+            };
+            const updateSeg = (id, field, val) => {
+                setData(prev => ({
+                    ...prev,
+                    segments: prev.segments.map(s => s.id === id ? {...s, [field]: parseInt(val) || 0} : s)
+                }));
+            };
+            const blurSeg = (id, field, val, min, max) => {
+                let num = parseInt(val);
+                if (isNaN(num)) num = min;
+                if (num < min) num = min;
+                if (num > max) num = max;
+                updateSeg(id, field, num);
+            };
+
+            return (
+                <div className="max-w-5xl mx-auto p-8 lg:p-12 pb-24">
+                    <header className="flex items-center justify-between mb-8">
+                        <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors px-4 py-2 rounded-xl hover:bg-slate-900/50">
+                            <X size={20} /> Cancelar
+                        </button>
+                        <h2 className="text-xl font-black uppercase tracking-tighter text-slate-400">Editor de sesión</h2>
+                        <button onClick={() => onSave(data)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20">
+                            <Save size={18} /> Guardar
+                        </button>
+                    </header>
+                    <div className="space-y-8">
+                        <section className="bg-slate-900/40 p-8 rounded-[2rem] border border-slate-900">
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 mb-6 flex items-center gap-2"><Info size={16} /> Datos generales</h3>
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="text-xs font-semibold text-slate-400 block mb-1.5">Nombre de la ruta</label>
+                                        <input className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm outline-none focus:border-blue-500 transition-colors" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-semibold text-slate-400 block mb-1.5">Autor</label>
+                                        <input className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm outline-none focus:border-blue-500 transition-colors" value={data.author} onChange={e => setData({...data, author: e.target.value})} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-400 block mb-1.5">Descripción</label>
+                                    <textarea className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm outline-none resize-none focus:border-blue-500 transition-colors" rows="3" value={data.description} onChange={e => setData({...data, description: e.target.value})} />
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="bg-slate-900/40 rounded-[2rem] border border-slate-900 overflow-hidden">
+                            <div className="p-8 border-b border-slate-900 flex justify-between items-center bg-slate-900/20">
+                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-2"><Clock size={16} /> Tramos cronológicos</h3>
+                                <button onClick={() => setData(prev => ({...prev, segments: [...prev.segments, {id: crypto.randomUUID(), duration: 120, RPM: 80, effort: 50}]}))} className="text-xs bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors">
+                                    <Plus size={14} /> Añadir tramo
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-3">
+                                {data.segments.map((s, idx) => {
+                                    const zone = getZone(s.effort);
+                                    return (
+                                        <div key={s.id} draggable onDragStart={() => handleDragStart(idx)} onDragOver={(e) => handleDragOver(e, idx)} onDragEnd={() => setDraggingIdx(null)} className={`flex items-center gap-4 p-4 rounded-2xl border transition-all cursor-move bg-slate-950 border-slate-900 hover:border-slate-700 ${draggingIdx === idx ? 'opacity-30' : ''}`}>
+                                            {GripVertical && <GripVertical size={28} className="text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing" />}
+                                            <div className="w-1.5 h-10 rounded-full" style={{ backgroundColor: zone.color }} />
+                                            <div className="grid grid-cols-3 gap-4 flex-grow">
+                                                <div>
+                                                    <label className="block text-xs font-semibold text-slate-400 mb-1.5">Duración (s)</label>
+                                                    <input type="number" min="5" max="3600" value={s.duration} onChange={e => updateSeg(s.id, 'duration', e.target.value)} onBlur={e => blurSeg(s.id, 'duration', e.target.value, 5, 3600)} className="w-full bg-transparent font-black text-lg outline-none" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-semibold text-slate-400 mb-1.5">RPM</label>
+                                                    <input type="number" min="50" max="130" value={s.RPM} onChange={e => updateSeg(s.id, 'RPM', e.target.value)} onBlur={e => blurSeg(s.id, 'RPM', e.target.value, 50, 130)} className="w-full bg-transparent font-black text-lg outline-none" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-semibold text-slate-400 mb-1.5">Esfuerzo (%)</label>
+                                                    <input type="number" min="0" max="100" value={s.effort} onChange={e => updateSeg(s.id, 'effort', e.target.value)} onBlur={e => blurSeg(s.id, 'effort', e.target.value, 0, 100)} className="w-full bg-transparent font-black text-lg outline-none" style={{ color: zone.color }} />
+                                                </div>
+                                            </div>
+                                            <button onClick={() => setData(prev => ({...prev, segments: prev.segments.filter(x => x.id !== s.id)}))} className="text-slate-700 hover:text-red-500 p-2"><Trash2 size={18} /></button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            );
+        }
+
+        function ProjectionView({ route, audioMode, onAudioModeChange, onBack, onFinish }) {
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [currentIdx, setCurrentIdx] = useState(0);
+            const [timeLeft, setTimeLeft] = useState(route.segments[0]?.duration || 0);
+            const [elapsed, setElapsed] = useState(0);
+            const [vizMode, setVizMode] = useState('hybrid');
+            const timerRef = useRef(null);
+            const current = route.segments[currentIdx];
+            const next = route.segments[currentIdx + 1];
+            const zone = getZone(current.effort);
+            const totalDuration = useMemo(() => route.segments.reduce((acc, s) => acc + s.duration, 0), [route]);
+            const sessionRemaining = totalDuration - elapsed;
+
+            const calculateLoad = (targetEffort, rpm) => {
+                // Formula: Resistance = (Effort - (RPM * 0.35)) / 0.65
+                const rawLoad = (targetEffort - (rpm * 0.35)) / 0.65;
+                return Math.max(0, Math.min(100, Math.round(rawLoad)));
+            };
+
+            const getLoadLabel = (val) => {
+                if (val >= 80) return { label: 'ALTA', color: 'text-red-500' };
+                if (val >= 65) return { label: 'MEDIA ALTA', color: 'text-orange-500' };
+                if (val >= 50) return { label: 'MEDIA', color: 'text-yellow-500' };
+                if (val >= 35) return { label: 'MEDIA BAJA', color: 'text-yellow-300' };
+                if (val >= 20) return { label: 'BAJA', color: 'text-blue-300' };
+                return { label: 'FRENO LIBRE', color: 'text-blue-500' };
+            };
+
+            const currentLoad = calculateLoad(current.effort, current.RPM || current.rpm);
+            const loadInfo = getLoadLabel(currentLoad);
+
+            const endSession = () => {
+                setIsPlaying(false);
+                audioEngine.stop();
+                audioEngine.playGong();
+                onFinish();
+            };
+
+            useEffect(() => {
+                if (isPlaying) {
+                    audioEngine.setMode(audioMode);
+                    audioEngine.start(current.RPM || current.rpm, current.effort);
+                    timerRef.current = setInterval(() => {
+                        setElapsed(prev => prev + 1);
+                        setTimeLeft(prev => {
+                            if (prev <= 1) {
+                                if (currentIdx < route.segments.length - 1) {
+                                    handleNext();
+                                    return 0;
+                                } else {
+                                    endSession();
+                                    return 0;
+                                }
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
+                } else {
+                    audioEngine.stop();
+                    clearInterval(timerRef.current);
+                }
+                return () => clearInterval(timerRef.current);
+            }, [isPlaying, currentIdx, route.segments]);
+
+            useEffect(() => {
+                if (isPlaying) {
+                    audioEngine.setMode(audioMode);
+                    audioEngine.update(current.RPM || current.rpm, current.effort);
+                }
+            }, [current, isPlaying, audioMode]);
+
+            const handleNext = () => {
+                if (currentIdx < route.segments.length - 1) {
+                    const nextIdx = currentIdx + 1;
+                    const elapsedBefore = route.segments.slice(0, nextIdx).reduce((a, b) => a + b.duration, 0);
+                    setElapsed(elapsedBefore);
+                    setCurrentIdx(nextIdx);
+                    setTimeLeft(route.segments[nextIdx].duration);
+                } else {
+                    endSession();
+                }
+            };
+
+            const handlePrev = () => {
+                if (currentIdx > 0) {
+                    const prevIdx = currentIdx - 1;
+                    const elapsedBefore = route.segments.slice(0, prevIdx).reduce((a, b) => a + b.duration, 0);
+                    setElapsed(elapsedBefore);
+                    setCurrentIdx(prevIdx);
+                    setTimeLeft(route.segments[prevIdx].duration);
+                } else {
+                    setElapsed(0);
+                    setTimeLeft(current.duration);
+                }
+            };
+
+            const fmt = (s) => {
+                const m = Math.floor(s / 60);
+                const sec = s % 60;
+                return `${m}:${sec.toString().padStart(2, '0')}`;
+            };
+
+            const VIZ_MODES = [
+                { id: 'info', Icon: Info, label: 'Información' },
+                { id: '3d', Icon: Box, label: '3D' },
+                { id: 'mountain', Icon: BarChart2, label: 'Perfil' },
+                { id: 'hybrid', Icon: Layout, label: 'Híbrido' }
+            ];
+
+            return (
+                <div className="h-screen w-full relative overflow-hidden bg-slate-950">
+                    {(vizMode === '3d' || vizMode === 'hybrid') && <HypnoticTunnel rpm={current.RPM || current.rpm} effort={current.effort} isPlaying={isPlaying} />}
+                    <div className="relative h-full flex flex-col z-10 p-8 lg:p-12">
+                        <header className="grid grid-cols-[1fr_auto_1fr] items-start mb-6 w-full">
+                            <button onClick={onBack} className="p-4 bg-slate-900/60 rounded-full text-slate-500 hover:text-white transition-all backdrop-blur-md justify-self-start"><ChevronLeft size={32} /></button>
+
+                            <div className="flex flex-col gap-3 justify-self-center">
+                                <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
+                                    {VIZ_MODES.map(m => (
+                                        <button key={m.id} onClick={() => setVizMode(m.id)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${vizMode === m.id ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><m.Icon size={18} /> <span className="hidden sm:inline">{m.label}</span></button>
+                                    ))}
+                                </div>
+
+                                <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md justify-center">
+                                    <button onClick={() => onAudioModeChange('postrock')} className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${audioMode === 'postrock' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}><Waves size={14}/> Postrock</button>
+                                    <button onClick={() => onAudioModeChange('symphonic')} className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${audioMode === 'symphonic' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><Wind size={14}/> Sinfónico</button>
+                                </div>
+                            </div>
+
+                            <div className="text-right justify-self-end">
+                                <h2 className="text-xl font-black uppercase text-slate-500 mb-1">{route.name}</h2>
+                                <div className="text-xs font-mono text-slate-400 font-bold">Sesión de {fmt(totalDuration)}</div>
+                            </div>
+                        </header>
+                        <div className="flex-grow flex flex-col items-center justify-center transition-all duration-700">
+                            <div className={`text-center transition-all duration-700 ${vizMode === '3d' ? 'scale-75 opacity-25 blur-sm' : 'scale-100 opacity-100'}`}>
+                                <span className="text-xs uppercase font-black text-slate-700 block mb-2 tracking-widest">Tiempo de tramo</span>
+                                <div className="text-[12rem] lg:text-[18rem] font-black leading-none tabular-nums" style={{ color: zone.color }}>{fmt(timeLeft)}</div>
+                                <div className="mt-4 flex flex-col items-center">
+                                    <span className="text-[10px] uppercase font-black text-slate-600 mb-1 tracking-widest">Sesión restante</span>
+                                    <div className="text-5xl font-black text-slate-200 tabular-nums">{fmt(sessionRemaining)}</div>
+                                </div>
+                                <div className="flex items-center justify-center gap-16 mt-8">
+                                    <div className="text-center"><span className="text-[10px] uppercase font-black text-slate-700 block mb-1">Cadencia</span><span className="text-6xl font-black">{current.RPM || current.rpm} <span className="text-lg text-slate-700">RPM</span></span></div>
+                                    <div className="text-center">
+                                        <span className="text-[10px] uppercase font-black text-slate-700 block mb-1">Carga estimada</span>
+                                        <span className={`text-3xl lg:text-4xl font-black block ${loadInfo.color}`}>{loadInfo.label}</span>
+                                        <span className="text-lg font-bold text-slate-600">~{currentLoad}%</span>
+                                    </div>
+                                    <div className="text-center"><span className="text-[10px] uppercase font-black text-slate-700 block mb-1">Intensidad</span><span className="text-6xl font-black" style={{ color: zone.color }}>{current.effort}%</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-6">
+                            {(vizMode === 'mountain' || vizMode === 'hybrid') && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><MountainProfile segments={route.segments} elapsed={elapsed} totalDuration={totalDuration} /></div>}
+                            <div className="grid grid-cols-[1fr_auto_1fr] items-center w-full">
+                                <div className="bg-slate-900/60 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md w-72 justify-self-start">
+                                    <span className="text-xs lg:text-sm font-black text-slate-600 uppercase block mb-2">Zona actual</span>
+                                    <div className="text-3xl lg:text-4xl font-black" style={{ color: zone.color }}>{zone.name}</div>
+                                    <div className="text-base lg:text-lg text-slate-500 italic">{zone.label}</div>
+                                </div>
+                                <div className="flex items-center gap-6 justify-self-center">
+                                    <button onClick={handlePrev} className="p-4 bg-slate-900/60 rounded-full text-slate-500 hover:text-white hover:scale-110 active:scale-95"><SkipBack size={32} /></button>
+                                    <button onClick={() => setIsPlaying(!isPlaying)} className="w-28 h-28 rounded-full bg-white text-slate-950 flex items-center justify-center hover:scale-110 active:scale-90 shadow-2xl transition-transform">{isPlaying ? <Pause size={48} fill="currentColor" /> : <Play size={48} fill="currentColor" className="ml-1" />}</button>
+                                    <button onClick={handleNext} className="p-4 bg-slate-900/60 rounded-full text-slate-500 hover:text-white hover:scale-110 active:scale-95"><SkipForward size={32} /></button>
+                                </div>
+                                <div className="bg-slate-900/60 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md w-72 text-right justify-self-end">
+                                    <span className="text-xs lg:text-sm font-black text-slate-600 uppercase block mb-2">{next ? 'Próximo tramo' : 'Finalizar sesión'}</span>
+                                    {next ? (
+                                        <><div className="text-3xl lg:text-4xl font-black" style={{ color: getZone(next.effort).color }}>{fmt(next.duration)} <span className="text-sm lg:text-base text-slate-600">@ {next.RPM || next.rpm} RPM</span></div><div className="text-sm lg:text-base text-slate-600 font-black uppercase">Cambio en {fmt(timeLeft)}</div></>
+                                    ) : (
+                                        <div className="text-2xl font-black text-slate-400 uppercase italic">Último tramo</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function SummaryView({ route, onBack }) {
+            const totalDuration = useMemo(() => route.segments.reduce((acc, s) => acc + s.duration, 0), [route]);
+
+            const stats = useMemo(() => {
+                let zoneDistribution = ZONES.map(z => ({ ...z, totalTime: 0 }));
+                let intensities = route.segments.map(s => s.effort);
+
+                route.segments.forEach(s => {
+                    const zIdx = ZONES.findIndex(z => s.effort <= z.max);
+                    const actualIdx = zIdx === -1 ? 4 : zIdx;
+                    zoneDistribution[actualIdx].totalTime += s.duration;
+                });
+
+                const avgIntensity = route.segments.reduce((acc, s) => acc + (s.effort * s.duration), 0) / totalDuration;
+
+                return {
+                    zones: zoneDistribution.map(z => ({ ...z, percentage: (z.totalTime / totalDuration) * 100 })),
+                    max: Math.max(...intensities),
+                    min: Math.min(...intensities),
+                    avg: Math.round(avgIntensity)
+                };
+            }, [route, totalDuration]);
+
+            const fmt = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+
+            return (
+                <div className="min-h-screen bg-slate-950 p-8 lg:p-16 flex items-center justify-center">
+                    <div className="max-w-4xl w-full">
+                        <div className="text-center mb-10 animate-in fade-in zoom-in duration-1000">
+                            <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-4 drop-shadow-[0_0_25px_rgba(234,179,8,0.4)]" />
+                            <h1 className="text-4xl lg:text-5xl font-black mb-3 tracking-tighter">¡Sesión completada!</h1>
+                            <p className="text-slate-500 text-lg font-medium">Enhorabuena, has finalizado tu entrenamiento.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            {[
+                                { label: 'Tiempo total', value: fmt(totalDuration), Icon: Clock, color: 'text-blue-400' },
+                                { label: 'Intensidad media', value: `${stats.avg}%`, Icon: Activity, color: 'text-emerald-400' },
+                                { label: 'Intensidad máxima', value: `${stats.max}%`, Icon: Zap, color: 'text-red-400' }
+                            ].map((stat, i) => (
+                                <div key={i} className="bg-slate-900/50 border border-slate-800 p-8 rounded-[3rem] text-center hover:border-slate-600 transition-all group animate-in slide-in-from-bottom-4" style={{ animationDelay: `${i * 100}ms` }}>
+                                    <stat.Icon className={`w-10 h-10 ${stat.color} mx-auto mb-4 group-hover:scale-110 transition-transform`} />
+                                    <div className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">{stat.label}</div>
+                                    <div className="text-5xl font-black tabular-nums">{stat.value}</div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[3rem] animate-in fade-in slide-in-from-bottom-8 duration-700">
+                            <h2 className="text-lg font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-3">
+                                <BarChart2 size={24} /> Distribución por zonas
+                            </h2>
+                            <div className="space-y-5">
+                                {stats.zones.map((z, i) => (
+                                    <div key={i} className="space-y-2">
+                                        <div className="flex justify-between text-sm lg:text-base font-bold uppercase tracking-tighter items-end">
+                                            <span style={{ color: z.color }} className="flex flex-col">
+                                                <span className="text-xs text-slate-600">{z.label}</span>
+                                                {z.name}
+                                            </span>
+                                            <span className="text-slate-300 text-2xl font-black">{Math.round(z.percentage)}% <span className="text-slate-700 font-normal text-sm ml-2">({fmt(z.totalTime)})</span></span>
+                                        </div>
+                                        <div className="h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800/50 relative shadow-inner">
+                                            <div
+                                                className="h-full transition-all duration-[2500ms] delay-500 ease-out"
+                                                style={{ width: `${z.percentage}%`, backgroundColor: z.color }}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mt-10 text-center">
+                            <button
+                                onClick={onBack}
+                                className="px-16 py-5 bg-white text-slate-950 rounded-[2rem] font-black text-xl hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-white/10"
+                            >
+                                Volver a la biblioteca
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function GeneratorModal({ onClose, onGenerate }) {
+            const [params, setParams] = useState({ name: 'Nueva sesión rítmica', author: 'Pablo', duration: 45, difficulty: 3, focus: 'mixto' });
+            return (
+                <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+                    <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[3rem] p-10 shadow-2xl">
+                        <div className="flex items-center gap-5 mb-10">
+                            <div className="p-4 bg-blue-600/20 text-blue-500 rounded-3xl"><Sparkles size={32} /></div>
+                            <div className="text-left">
+                                <h2 className="text-3xl font-black tracking-tight">Algoritmo generador</h2>
+                                <p className="text-sm font-medium text-slate-500 mt-1">Configura la clase según tus preferencias.</p>
+                            </div>
+                        </div>
+                        <div className="space-y-8 text-left">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-400 block mb-1.5 ml-1">Nombre</label>
+                                    <input className="w-full bg-slate-800 rounded-2xl p-4 text-sm border-none outline-none focus:ring-2 ring-blue-600 transition-all" value={params.name} onChange={e => setParams({...params, name: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-400 block mb-1.5 ml-1">Autor</label>
+                                    <input className="w-full bg-slate-800 rounded-2xl p-4 text-sm border-none outline-none focus:ring-2 ring-blue-600 transition-all" value={params.author} onChange={e => setParams({...params, author: e.target.value})} />
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex justify-between mb-2 px-1">
+                                    <label className="text-xs font-semibold text-slate-400">Duración</label>
+                                    <span className="text-blue-500 font-black text-sm">{params.duration} min</span>
+                                </div>
+                                <input type="range" min="15" max="90" step="5" className="w-full accent-blue-600 cursor-pointer" value={params.duration} onChange={e => setParams({...params, duration: parseInt(e.target.value)})} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-slate-400 block mb-2.5 ml-1">Dificultad (1 a 5)</label>
+                                <div className="grid grid-cols-5 gap-3">
+                                    {[1,2,3,4,5].map(v => (
+                                        <button key={v} onClick={() => setParams({...params, difficulty: v})} className={`p-4 rounded-2xl font-black transition-all ${params.difficulty === v ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-800 text-slate-500 hover:bg-slate-700'}`}>{v}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-slate-400 block mb-2.5 ml-1">Tipo de ruta</label>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {['escalada', 'velocidad', 'mixto'].map(f => (
+                                        <button key={f} onClick={() => setParams({...params, focus: f})} className={`p-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${params.focus === f ? 'bg-white text-slate-900 shadow-lg' : 'bg-slate-800 text-slate-600 hover:bg-slate-700'}`}>{f}</button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-12 space-y-3">
+                            <button onClick={() => onGenerate(params)} className="w-full py-5 bg-blue-600 hover:bg-blue-500 rounded-3xl font-black text-xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-blue-900/40"><RefreshCw size={24} /> Crear sesión ahora</button>
+                            <button onClick={onClose} className="w-full py-3 text-slate-600 font-bold uppercase text-[10px] tracking-widest hover:text-white transition-colors">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function ImportModal({ onClose, onImport }) {
+            return (
+                <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-center">
+                    <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[3rem] p-10 shadow-2xl">
+                        <h2 className="text-2xl font-black mb-8 tracking-tight">Importar biblioteca</h2>
+                        <div className="space-y-4">
+                            <label className="block p-8 border-2 border-dashed border-slate-800 hover:border-blue-600 rounded-[2rem] cursor-pointer group bg-slate-900/40 transition-all">
+                                <Plus className="mx-auto mb-3 text-slate-700 group-hover:text-blue-500 transition-colors" size={32} />
+                                <div className="font-black text-sm uppercase tracking-widest text-slate-300">Añadir rutas</div>
+                                <input type="file" className="hidden" accept=".json" onChange={e => onImport(e, 'add')} />
+                            </label>
+                            <label className="block p-8 border-2 border-dashed border-slate-800 hover:border-red-600 rounded-[2rem] cursor-pointer group bg-slate-900/40 transition-all">
+                                <Trash2 className="mx-auto mb-3 text-slate-700 group-hover:text-red-500 transition-colors" size={32} />
+                                <div className="font-black text-sm uppercase tracking-widest text-slate-300">Sustituir biblioteca</div>
+                                <input type="file" className="hidden" accept=".json" onChange={e => onImport(e, 'replace')} />
+                            </label>
+                            <button onClick={onClose} className="w-full py-4 text-slate-600 font-bold mt-4 uppercase text-[10px] tracking-widest hover:text-white transition-colors">Cancelar</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function AboutModal({ onClose }) {
+            return (
+                <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+                    <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-[3rem] p-8 lg:p-12 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                        <button onClick={onClose} className="absolute top-8 right-8 text-slate-500 hover:text-white transition-colors">
+                            <X size={24} />
+                        </button>
+
+                        <div className="overflow-y-auto custom-scrollbar pr-4">
+                            <div className="mb-10">
+                                <h2 className="text-3xl lg:text-4xl font-black tracking-tighter mb-4 text-blue-400">Manifiesto Anti-Reggaeton</h2>
+                                <p className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-8">(O por qué existe esta app)</p>
+
+                                <div className="space-y-6 text-slate-300 leading-relaxed text-lg">
+                                    <p>
+                                        Desde septiembre de 2025, la <a href="https://piscinaprovincial.dipcas.es/es/" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Piscina Provincial de Castellón</a> se ha convertido, voluntariamente y sin coacción, en mi segundo hogar. De lunes a sábado me podréis encontrar allí, esculpiendo el cuerpo (y la paciencia) en clases de funcional, core, HIIT y, sobre todo, dejándome el alma en el ciclo indoor.
+                                    </p>
+                                    <p>
+                                        Tengo que decirlo: si sigo yendo es, en gran parte, gracias a los monitores y las monitoras. Son magníficos, absolutamente cercanos y tienen una energía que se contagia. Hacen que ir a sudar la gota gorda sea un auténtico placer y convierten cada sesión en algo más que simple ejercicio.
+                                    </p>
+                                    <p>
+                                        El deporte me ayuda a gestionar el estrés laboral y a mantener la cabeza en su sitio, lo cual es un enorme disfrute. ¿El único problema? Que mi tolerancia al ácido láctico ha mejorado, pero mi tolerancia al reggaeton sigue bajo mínimos. 😅
+                                    </p>
+                                    <p>
+                                        Esta aplicación es mi pequeña <strong>protesta virtual</strong>. Nace de la necesidad vital de pedalear sintiéndome el protagonista de una película épica y no perreando en una discoteca (algo que, por otro lado, se me da fatal).
+                                    </p>
+                                    <p>
+                                        He diseñado este generador para crear rutinas de entrenamiento acompañadas de <strong>postrock</strong> y <strong>paisajes sinfónicos espaciales</strong> procedimentales. Porque si vamos a sufrir en la bici, hagámoslo con clase y mirando a las estrellas.
+                                    </p>
+                                    <p className="text-sm text-slate-500 italic border-l-2 border-slate-700 pl-4">
+                                        Eso sí, reconozco que ahora mismo el motor de audio es poco más que un experimento en forma de protesta. Soy consciente de que necesitaría mucho más trabajo para hacerlo plenamente satisfactorio, pero es un comienzo honesto hacia la liberación auditiva.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center gap-6">
+                                <img
+                                    src="https://drive.google.com/thumbnail?id=1pbNyTrnZeZvfWLu2Lm66f9tVQ3OqTKHx&sz=w500-h500"
+                                    alt="Pablo Felip"
+                                    className="w-20 h-20 rounded-full border-2 border-slate-700"
+                                />
+                                <div className="text-center sm:text-left">
+                                    <a href="https://www.linkedin.com/in/pfelipm/" target="_blank" rel="noreferrer" className="text-xl font-black hover:text-blue-400 transition-colors block mb-1">
+                                        Pablo Felip
+                                    </a>
+                                    <p className="text-slate-500 text-sm mb-4">Entusiasta del postrock, los videojuegos con buena historia y los gatos.</p>
+
+                                    <div className="flex flex-wrap justify-center sm:justify-start gap-3">
+                                        <a href="https://github.com/pfelipm/postpedal" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors bg-slate-800 px-4 py-2 rounded-xl">
+                                            <Github size={14} /> GitHub
+                                        </a>
+                                        <a href="https://www.linkedin.com/in/pfelipm/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-blue-400 transition-colors bg-slate-800 px-4 py-2 rounded-xl">
+                                            <Linkedin size={14} /> LinkedIn
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Montaje de la Aplicación ---
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
