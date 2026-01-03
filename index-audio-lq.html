@@ -46,7 +46,8 @@
             ChevronLeft, Save, PlayCircle, Edit3, Clock,
             Settings, Music, FileText, Info, Sparkles, RefreshCw,
             GripVertical, Box, BarChart2, Layout, SkipBack, SkipForward,
-            Trophy, Activity, Zap, Waves, Wind, HelpCircle, Github, X, Linkedin
+            Trophy, Activity, Zap, Waves, Wind, HelpCircle, Github, X, Linkedin,
+            Volume2, Volume1, VolumeX, Timer
         } from 'lucide-react';
 
         // --- Constantes y utilidades ---
@@ -72,6 +73,7 @@
                 this.effort = 50;
                 this.timerId = null;
                 this.mode = 'postrock';
+                this.mixMode = 'full'; // full, focus, mute
 
                 this.pads = [];
                 this.mainFilter = null;
@@ -138,6 +140,26 @@
                 }
             }
 
+            setMixMode(newMixMode) {
+                if (this.mixMode !== newMixMode) {
+                    this.mixMode = newMixMode;
+                    if (!this.ctx) return;
+
+                    if (this.mixMode === 'mute') {
+                        this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+                    } else if (this.mixMode === 'focus') {
+                        // Silenciar pads suavemente
+                        this.pads.forEach(p => p.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.5));
+                        // Restaurar volumen master si estaba muteado
+                        this.masterGain.gain.setTargetAtTime(0.3 + (this.effort / 250), this.ctx.currentTime, 0.1);
+                    } else {
+                        // Full: restaurar pads y master
+                        if (this.isPlaying) this.createPads();
+                        this.masterGain.gain.setTargetAtTime(0.3 + (this.effort / 250), this.ctx.currentTime, 0.1);
+                    }
+                }
+            }
+
             createPads() {
                 this.pads.forEach(p => {
                     try {
@@ -146,6 +168,8 @@
                     } catch(e){}
                 });
                 this.pads = [];
+
+                if (this.mixMode === 'focus' || this.mixMode === 'mute') return;
 
                 const currentFreqs = this.chords[this.chordIndex];
 
@@ -186,7 +210,7 @@
             }
 
             updateChord() {
-                if (!this.ctx) return;
+                if (!this.ctx || this.mixMode === 'focus' || this.mixMode === 'mute') return;
                 this.chordIndex = (this.chordIndex + 1) % this.chords.length;
                 const nextFreqs = this.chords[this.chordIndex];
 
@@ -210,6 +234,9 @@
 
             playGong() {
                 if (!this.ctx) this.init();
+                // El gong suena incluso en focus, pero no en mute si está totalmente muteado
+                if (this.mixMode === 'mute') return;
+
                 const time = this.ctx.currentTime;
                 const osc = this.ctx.createOscillator();
                 const noise = this.ctx.createBufferSource();
@@ -254,7 +281,9 @@
                 this.nextTickTime = this.ctx.currentTime + 0.1;
 
                 const startTime = Math.max(0, this.ctx.currentTime + 2);
-                this.pads.forEach(p => p.gain.gain.linearRampToValueAtTime(p.baseGain, startTime));
+                if (this.mixMode === 'full') {
+                    this.pads.forEach(p => p.gain.gain.linearRampToValueAtTime(p.baseGain, startTime));
+                }
                 this.scheduler();
             }
 
@@ -273,7 +302,7 @@
             update(rpm, effort) {
                 this.rpm = rpm;
                 this.effort = effort;
-                if (this.ctx) {
+                if (this.ctx && this.mixMode !== 'mute') {
                     const baseCutoff = this.mode === 'postrock' ? 400 : 200;
                     const effortMod = effort * (this.mode === 'postrock' ? 60 : 30);
                     const lfo = Math.sin(Date.now() * 0.0005) * 100;
@@ -290,11 +319,14 @@
             }
 
             playTick(rawTime) {
+                if (this.mixMode === 'mute') return;
+
                 const time = Math.max(this.ctx.currentTime, rawTime);
                 this.beatCount++;
                 if (this.beatCount % 32 === 0) this.updateChord();
                 const isAccent = this.beatCount % 4 === 1;
 
+                // Ritmo (Suena en 'full' y 'focus')
                 this.musicGain.gain.cancelScheduledValues(time);
                 this.musicGain.gain.setValueAtTime(1.0, time);
                 this.musicGain.gain.exponentialRampToValueAtTime(0.7, time + 0.05);
@@ -324,6 +356,9 @@
                 sub.start(time);
                 kick.stop(time + 0.3);
                 sub.stop(time + 0.3);
+
+                // Elementos melódicos (Solo en 'full')
+                if (this.mixMode === 'focus') return;
 
                 if (Math.random() > 0.92) this.playPing(time + 0.1);
 
@@ -576,6 +611,7 @@
             const [isImportModalOpen, setIsImportModalOpen] = useState(false);
             const [isAboutOpen, setIsAboutOpen] = useState(false);
             const [audioMode, setAudioMode] = useState('postrock');
+            const [mixMode, setMixMode] = useState('full'); // full, focus, mute
 
             useEffect(() => {
                 const saved = localStorage.getItem('ciclo_pro_v9');
@@ -590,7 +626,7 @@
                 const newRoute = {
                     id: crypto.randomUUID(),
                     name: "Nueva ruta manual",
-                    author: "Pablo",
+                    author: "", // FIX: Autor vacío por defecto
                     date: new Date().toLocaleDateString(),
                     description: "",
                     segments: [{ id: crypto.randomUUID(), duration: 60, RPM: 90, effort: 50 }]
@@ -600,10 +636,15 @@
             };
 
             const handleSaveRoute = (route) => {
+                // FIX: Asignar "Anónimo" si el autor está vacío
+                const routeToSave = {
+                    ...route,
+                    author: route.author.trim() === "" ? "Anónimo" : route.author
+                };
                 setRoutes(prev => {
-                    const exists = prev.find(r => r.id === route.id);
-                    if (exists) return prev.map(r => r.id === route.id ? route : r);
-                    return [...prev, route];
+                    const exists = prev.find(r => r.id === routeToSave.id);
+                    if (exists) return prev.map(r => r.id === routeToSave.id ? routeToSave : r);
+                    return [...prev, routeToSave];
                 });
                 setView('library');
             };
@@ -642,7 +683,9 @@
                         <ProjectionView
                             route={activeRoute}
                             audioMode={audioMode}
+                            mixMode={mixMode}
                             onAudioModeChange={(m) => { setAudioMode(m); audioEngine.setMode(m); }}
+                            onMixModeChange={(m) => { setMixMode(m); audioEngine.setMixMode(m); }}
                             onFinish={() => setView('summary')}
                             onBack={() => { audioEngine.stop(); setView('library'); }}
                         />
@@ -793,6 +836,18 @@
                 updateSeg(id, field, num);
             };
 
+            const fmt = (s) => {
+                const m = Math.floor(s / 60);
+                const sec = s % 60;
+                return `${m}:${sec.toString().padStart(2, '0')}`;
+            };
+
+            const totalDuration = useMemo(() => data.segments.reduce((acc, s) => acc + s.duration, 0), [data.segments]);
+            const avgIntensity = useMemo(() => {
+                if (totalDuration === 0) return 0;
+                return Math.round(data.segments.reduce((acc, s) => acc + (s.effort * s.duration), 0) / totalDuration);
+            }, [data.segments, totalDuration]);
+
             return (
                 <div className="max-w-5xl mx-auto p-8 lg:p-12 pb-24">
                     <header className="flex items-center justify-between mb-8">
@@ -823,6 +878,17 @@
                                     <textarea className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm outline-none resize-none focus:border-blue-500 transition-colors" rows="3" value={data.description} onChange={e => setData({...data, description: e.target.value})} />
                                 </div>
                             </div>
+                        </section>
+
+                        <section className="bg-slate-900/40 p-8 rounded-[2rem] border border-slate-900">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-2"><BarChart2 size={16} /> PERFIL DE SESIÓN</h3>
+                                <div className="flex gap-4 text-xs font-bold text-slate-400">
+                                    <span className="flex items-center gap-1"><Timer size={14} /> {fmt(totalDuration)}</span>
+                                    <span className="flex items-center gap-1"><Activity size={14} /> {avgIntensity}% AVG</span>
+                                </div>
+                            </div>
+                            <MountainProfile segments={data.segments} elapsed={0} totalDuration={totalDuration} />
                         </section>
 
                         <section className="bg-slate-900/40 rounded-[2rem] border border-slate-900 overflow-hidden">
@@ -864,7 +930,7 @@
             );
         }
 
-        function ProjectionView({ route, audioMode, onAudioModeChange, onBack, onFinish }) {
+        function ProjectionView({ route, audioMode, mixMode, onAudioModeChange, onMixModeChange, onBack, onFinish }) {
             const [isPlaying, setIsPlaying] = useState(false);
             const [currentIdx, setCurrentIdx] = useState(0);
             const [timeLeft, setTimeLeft] = useState(route.segments[0]?.duration || 0);
@@ -905,6 +971,7 @@
             useEffect(() => {
                 if (isPlaying) {
                     audioEngine.setMode(audioMode);
+                    audioEngine.setMixMode(mixMode);
                     audioEngine.start(current.RPM || current.rpm, current.effort);
                     timerRef.current = setInterval(() => {
                         setElapsed(prev => prev + 1);
@@ -931,9 +998,10 @@
             useEffect(() => {
                 if (isPlaying) {
                     audioEngine.setMode(audioMode);
+                    audioEngine.setMixMode(mixMode);
                     audioEngine.update(current.RPM || current.rpm, current.effort);
                 }
-            }, [current, isPlaying, audioMode]);
+            }, [current, isPlaying, audioMode, mixMode]);
 
             const handleNext = () => {
                 if (currentIdx < route.segments.length - 1) {
@@ -987,9 +1055,19 @@
                                     ))}
                                 </div>
 
-                                <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md justify-center">
-                                    <button onClick={() => onAudioModeChange('postrock')} className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${audioMode === 'postrock' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}><Waves size={14}/> Postrock</button>
-                                    <button onClick={() => onAudioModeChange('symphonic')} className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${audioMode === 'symphonic' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><Wind size={14}/> Sinfónico</button>
+                                <div className="flex gap-2">
+                                    {/* Selector de Estilo */}
+                                    <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md justify-center">
+                                        <button onClick={() => onAudioModeChange('postrock')} className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${audioMode === 'postrock' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}><Waves size={14}/> Postrock</button>
+                                        <button onClick={() => onAudioModeChange('symphonic')} className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${audioMode === 'symphonic' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><Wind size={14}/> Sinfónico</button>
+                                    </div>
+
+                                    {/* Selector de Mezcla (Full, Focus, Mute) */}
+                                    <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md justify-center">
+                                        <button onClick={() => onMixModeChange('full')} title="Mezcla completa" className={`p-2 rounded-xl transition-all ${mixMode === 'full' ? 'bg-white text-slate-950' : 'text-slate-500 hover:text-slate-300'}`}><Volume2 size={16} /></button>
+                                        <button onClick={() => onMixModeChange('focus')} title="Solo Ritmo (Focus)" className={`p-2 rounded-xl transition-all ${mixMode === 'focus' ? 'bg-white text-slate-950' : 'text-slate-500 hover:text-slate-300'}`}><Volume1 size={16} /></button>
+                                        <button onClick={() => onMixModeChange('mute')} title="Silencio (Solo Visual)" className={`p-2 rounded-xl transition-all ${mixMode === 'mute' ? 'bg-red-500 text-white' : 'text-slate-500 hover:text-slate-300'}`}><VolumeX size={16} /></button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1093,6 +1171,14 @@
                             ))}
                         </div>
 
+                        {/* Nueva Sección: Gráfico de Perfil en Resumen */}
+                        <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[3rem] animate-in fade-in slide-in-from-bottom-8 duration-700 mb-8">
+                            <h2 className="text-lg font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-3">
+                                <BarChart2 size={24} /> Perfil de la sesión
+                            </h2>
+                            <MountainProfile segments={route.segments} elapsed={totalDuration} totalDuration={totalDuration} />
+                        </div>
+
                         <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[3rem] animate-in fade-in slide-in-from-bottom-8 duration-700">
                             <h2 className="text-lg font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-3">
                                 <BarChart2 size={24} /> Distribución por zonas
@@ -1132,7 +1218,7 @@
         }
 
         function GeneratorModal({ onClose, onGenerate }) {
-            const [params, setParams] = useState({ name: 'Nueva sesión rítmica', author: 'Pablo', duration: 45, difficulty: 3, focus: 'mixto' });
+            const [params, setParams] = useState({ name: 'Nueva sesión rítmica', author: 'PostPedal AI', duration: 45, difficulty: 3, focus: 'mixto' });
             return (
                 <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[100] flex items-center justify-center p-6">
                     <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[3rem] p-10 shadow-2xl">

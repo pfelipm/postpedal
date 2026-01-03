@@ -29,12 +29,18 @@ Si quieres sufrir en la bici, hazlo con clase y mirando a las estrellas.
 
 Esta no es una app de reproducción de MP3. Aquí hay **ciencia y ruido**:
 
-*   🎶 **Motor de Audio Procedural (`RhythmicEngine`):**
+*   🎶 **Motor de Audio Procedural (`RhythmicEngine` / `AetherAdapter`):**
     *   No hay archivos de audio pregrabados. Toda la música se genera en tiempo real usando la **Web Audio API**.
-    *   **Modo Postrock:** Ondas de sierra desafinadas para crear muros de sonido densos.
-    *   **Modo Sinfónico:** Texturas espaciales y melodías generativas.
+    *   **Modos de Audio Dinámicos:**
+        *   **Mezcla Completa:** La experiencia total con todas las capas de síntesis.
+        *   **Modo Focus:** Solo ritmo (bombo/grave). Ideal para mantener la cadencia mientras escuchas tus propios podcasts o música externa. **Reduce significativamente el uso de CPU y batería.**
+        *   **Modo Silencio:** Solo visual. Permite disfrutar de la inmersión del túnel 3D con cero impacto auditivo. **Máximo ahorro de recursos.**
+    *   **Estilos Sonoros:** Elige entre **Postrock** (muros de sonido) o **Sinfónico** (texturas espaciales).
     *   El audio reacciona a tu esfuerzo: la música se vuelve más intensa y "ruge" cuando subes la intensidad.
 *   🌀 **Túnel Hipnótico 3D:** Una visualización construida con **Three.js** que reacciona a tus RPM y vatios. Diseñada para que te quedes mirando al centro y olvides que te arden los cuádriceps.
+*   📊 **Visualización de Sesión:**
+    *   **Editor con Preview:** Ahora puedes ver el perfil de elevación (esfuerzo) mientras diseñas la sesión para un control total del ritmo.
+    *   **Resumen Final Detallado:** Al terminar, visualiza tu desempeño comparado con el perfil teórico de la ruta, junto con estadísticas de zonas.
 *   🧠 **Generador de Sesiones Inteligente:** ¿No sabes qué hacer hoy? Dile cuánto tiempo tienes y cuánto quieres sufrir (del 1 al 5). El algoritmo creará una ruta con calentamiento, picos de intensidad y enfriamiento.
 *   ✏️ **Editor Manual:** Crea tus propias tablas de tortura arrastrando y soltando tramos.
 *   💾 **Persistencia Local:** Tus rutas se guardan en el navegador. Importa y exporta tu biblioteca en JSON para compartirla (o para hacer copias de seguridad).
